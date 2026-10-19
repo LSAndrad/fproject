@@ -46,7 +46,7 @@ flowchart LR
 ## Roadmap
 
 **Phase 1: Ledger**
-- [ ] Domain model: accounts, statements, transactions
+- [x] Domain model: accounts, statements, transactions
 - [ ] SQLite storage with one statement per account per month
 - [ ] `Extractor` interface and reconciliation
 - [ ] OFX extractor
@@ -57,6 +57,7 @@ flowchart LR
 **Phase 2: Categorization**
 - [ ] Small, fixed set of categories
 - [ ] Scope: household vs. personal
+- [ ] Internal transfers (checking → savings, credit card bill payment) excluded from income and expense totals
 - [ ] Assisted categorization with human confirmation
 
 **Phase 3: Monthly insights**
