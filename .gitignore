@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Editors / OS
+.vscode/
+.idea/
+*:Zone.Identifier
+.DS_Store
+
+# Secrets
+.env
+
+# ---------------------------------------------------------------
+# Personal financial data must never be committed.
+# Real statements and the local database live in data/ (ignored).
+# Synthetic sample statements live in tests/fixtures/ (tracked).
+# ---------------------------------------------------------------
+data/
+*.db
+*.db-wal
+*.db-shm
+*.ofx
+*.pdf
+*.csv
+!tests/fixtures/**
