@@ -47,7 +47,7 @@ flowchart LR
 
 **Phase 1: Ledger**
 - [x] Domain model: accounts, statements, transactions
-- [ ] SQLite storage with one statement per account per month
+- [x] SQLite storage with one statement per account per month
 - [ ] `Extractor` interface and reconciliation
 - [ ] OFX extractor
 - [ ] Generic PDF extractor (tested against a synthetic bank)
