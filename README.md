@@ -19,18 +19,17 @@ fproject answers these from your own statements, on your own machine. Your finan
 
 ```mermaid
 flowchart LR
-    F[Statement file<br/>PDF / OFX] --> X{Extractor}
-    X -->|OFX| O[OFX parser]
-    X -->|PDF| P[PDF layout parser]
-    X -->|any| L[LLM extractor]
-    O & P & L --> R[Reconciliation<br/>opening + Σ tx = closing]
+    F[Statement file<br/>spreadsheet / PDF] --> X{Extractor}
+    X -->|structured| S[Spreadsheet parser]
+    X -->|complex layout| L[LLM extractor]
+    S & L --> R[Reconciliation<br/>opening + Σ tx = closing]
     R -->|balances match| DB[(Ledger<br/>SQLite)]
     R -->|mismatch| E[Rejected]
     DB --> C[Categorization]
     C --> A[Monthly insights<br/>budgets · goals]
 ```
 
-1. **Ingestion.** Every bank format sits behind a single `Extractor` interface. A file goes in; a statement with its transactions comes out. New banks mean new extractors, not changes to the core.
+1. **Ingestion.** Every bank format sits behind a single `Extractor` interface. A file goes in; a statement with its transactions comes out. New banks mean new extractors, not changes to the core. Structured formats get a deterministic parser (free, fast, testable); complex PDF layouts such as credit card bills go through an LLM, whose output is then held to the same reconciliation.
 2. **Reconciliation.** Before anything is stored, the transactions must add up to the statement's own totals. This is what makes any extractor trustworthy, including an LLM one.
 3. **Ledger.** A statement is unique per *(account, reference month)*. Transactions get a generated UUID; no bank-provided identifier is trusted as a key. Raw data is never modified.
 4. **Categorization.** Category and scope (household vs. personal) live in a separate layer on top of the ledger, so a categorization mistake can never corrupt the raw data.
@@ -49,15 +48,16 @@ flowchart LR
 - [x] Domain model: accounts, statements, transactions
 - [x] SQLite storage with one statement per account per month
 - [x] `Extractor` interface and reconciliation
-- [ ] OFX extractor
-- [ ] Generic PDF extractor (tested against a synthetic bank)
-- [ ] LLM-based extractor as a pluggable alternative
-- [ ] `import` command
+- [ ] Counterparty details on transactions (who a transfer went to)
+- [ ] Spreadsheet extractor: configurable columns, split by month, row-level balance check
+- [ ] `import` and monthly `summary` commands
+- [ ] LLM-based PDF extractor for complex layouts (e.g. credit card bills)
 
 **Phase 2: Categorization**
 - [ ] Small, fixed set of categories
 - [ ] Scope: household vs. personal
-- [ ] Internal transfers (checking → savings, credit card bill payment) excluded from income and expense totals
+- [ ] Spending view: a credit card bill payment is replaced by the bill's itemized purchases
+- [ ] Money moved to savings or investments shown as saved, not spent
 - [ ] Assisted categorization with human confirmation
 
 **Phase 3: Monthly insights**
