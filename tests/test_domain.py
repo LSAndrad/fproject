@@ -72,6 +72,15 @@ class TestTransaction:
         with pytest.raises(ValueError):
             make_transaction(description="   ")
 
+    def test_details_are_optional(self):
+        assert make_transaction().details is None
+
+    def test_rejects_blank_details(self):
+        with pytest.raises(ValueError):
+            Transaction(
+                posted_on=date(2026, 9, 3), description="PIX SENT", amount_cents=-1000, details=" "
+            )
+
 
 class TestStatement:
     def make_statement(self, amounts: list[int]) -> Statement:

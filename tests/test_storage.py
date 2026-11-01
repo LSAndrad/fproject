@@ -33,7 +33,12 @@ SEPTEMBER = Month(2026, 9)
 def make_statement(account: Account, month: Month = SEPTEMBER, **overrides) -> Statement:
     transactions = [
         Transaction(posted_on=date(2026, 9, 1), description="SALARY", amount_cents=500000),
-        Transaction(posted_on=date(2026, 9, 5), description="RENT", amount_cents=-180000),
+        Transaction(
+            posted_on=date(2026, 9, 5),
+            description="PIX SENT",
+            details="JOHN LANDLORD",
+            amount_cents=-180000,
+        ),
         Transaction(posted_on=date(2026, 9, 5), description="GROCERIES", amount_cents=-35090),
     ]
     values = {
@@ -73,7 +78,7 @@ class TestStatements:
         statement = make_statement(account)
         repo.save_statement(statement)
         stored = repo.get_statement(account.id, statement.month)
-        assert [t.description for t in stored.transactions] == ["SALARY", "RENT", "GROCERIES"]
+        assert [t.description for t in stored.transactions] == ["SALARY", "PIX SENT", "GROCERIES"]
 
     def test_missing_statement_returns_none(self, repo, account):
         assert repo.get_statement(account.id, Month(2026, 9)) is None
@@ -123,7 +128,7 @@ class TestSchema:
         repo.save_statement(statement)
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute(
-                "INSERT INTO transactions VALUES (?, ?, 0, '2026-09-01', 'X', 0)",
+                "INSERT INTO transactions VALUES (?, ?, 0, '2026-09-01', 'X', NULL, 0)",
                 (str(uuid4()), str(statement.id)),
             )
 
@@ -132,7 +137,7 @@ class TestSchema:
         repo.save_statement(statement)
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute(
-                "INSERT INTO transactions VALUES (?, ?, 0, '2026-09-01', 'X', 19.9)",
+                "INSERT INTO transactions VALUES (?, ?, 0, '2026-09-01', 'X', NULL, 19.9)",
                 (str(uuid4()), str(statement.id)),
             )
 

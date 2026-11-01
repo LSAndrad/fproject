@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     position     INTEGER NOT NULL,  -- order of appearance in the statement
     posted_on    TEXT NOT NULL,     -- ISO date
     description  TEXT NOT NULL,
+    details      TEXT,
     amount_cents INTEGER NOT NULL CHECK (amount_cents <> 0),
     UNIQUE (statement_id, position)
 ) STRICT;
@@ -118,8 +119,8 @@ class Repository:
             self._conn.executemany(
                 """
                 INSERT INTO transactions
-                    (id, statement_id, position, posted_on, description, amount_cents)
-                VALUES (?, ?, ?, ?, ?, ?)
+                    (id, statement_id, position, posted_on, description, details, amount_cents)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -128,6 +129,7 @@ class Repository:
                         position,
                         t.posted_on.isoformat(),
                         t.description,
+                        t.details,
                         t.amount_cents,
                     )
                     for position, t in enumerate(statement.transactions)
@@ -156,6 +158,7 @@ class Repository:
                     id=UUID(t["id"]),
                     posted_on=date.fromisoformat(t["posted_on"]),
                     description=t["description"],
+                    details=t["details"],
                     amount_cents=t["amount_cents"],
                 )
                 for t in transactions
