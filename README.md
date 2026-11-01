@@ -48,7 +48,7 @@ flowchart LR
 - [x] Domain model: accounts, statements, transactions
 - [x] SQLite storage with one statement per account per month
 - [x] `Extractor` interface and reconciliation
-- [ ] Counterparty details on transactions (who a transfer went to)
+- [x] Counterparty details on transactions (who a transfer went to)
 - [ ] Spreadsheet extractor: configurable columns, split by month, row-level balance check
 - [ ] `import` and monthly `summary` commands
 - [ ] LLM-based PDF extractor for complex layouts (e.g. credit card bills)
