@@ -49,7 +49,7 @@ flowchart LR
 - [x] SQLite storage with one statement per account per month
 - [x] `Extractor` interface and reconciliation
 - [x] Counterparty details on transactions (who a transfer went to)
-- [ ] Spreadsheet extractor: configurable columns, split by month, row-level balance check
+- [x] Spreadsheet extractor: configurable columns, split by month, row-level balance check
 - [ ] `import` and monthly `summary` commands
 - [ ] LLM-based PDF extractor for complex layouts (e.g. credit card bills)
 
