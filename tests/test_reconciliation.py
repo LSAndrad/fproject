@@ -30,7 +30,7 @@ def test_accepts_empty_statement_with_unchanged_balance():
 
 def test_accepts_negative_balances():
     # A credit card statement typically runs below zero.
-    reconcile(make_statement(opening=-432118, closing=-563875, amounts=[432118, -563875]))
+    reconcile(make_statement(opening=-250000, closing=-312345, amounts=[250000, -312345]))
 
 
 def test_rejects_missing_transaction():
