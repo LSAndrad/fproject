@@ -81,14 +81,14 @@ class Repository:
         row = self._conn.execute(
             "SELECT * FROM accounts WHERE id = ?", (str(account_id),)
         ).fetchone()
-        if row is None:
-            return None
-        return Account(
-            id=UUID(row["id"]),
-            owner=row["owner"],
-            institution=row["institution"],
-            kind=AccountKind(row["kind"]),
-        )
+        return None if row is None else _account(row)
+
+    def find_account(self, owner: str, institution: str, kind: AccountKind) -> Account | None:
+        row = self._conn.execute(
+            "SELECT * FROM accounts WHERE owner = ? AND institution = ? AND kind = ?",
+            (owner, institution, kind.value),
+        ).fetchone()
+        return None if row is None else _account(row)
 
     def save_statement(self, statement: Statement) -> None:
         """Store a statement and its transactions atomically.
@@ -141,8 +141,20 @@ class Repository:
             "SELECT * FROM statements WHERE account_id = ? AND month = ?",
             (str(account_id), str(month)),
         ).fetchone()
-        if row is None:
-            return None
+        return None if row is None else self._load_statement(row)
+
+    def list_statements(self, month: Month) -> list[Statement]:
+        """All statements for a month, across accounts."""
+        rows = self._conn.execute(
+            """
+            SELECT s.* FROM statements s JOIN accounts a ON a.id = s.account_id
+            WHERE s.month = ? ORDER BY a.owner, a.institution, a.kind
+            """,
+            (str(month),),
+        ).fetchall()
+        return [self._load_statement(row) for row in rows]
+
+    def _load_statement(self, row: sqlite3.Row) -> Statement:
         transactions = self._conn.execute(
             "SELECT * FROM transactions WHERE statement_id = ? ORDER BY position",
             (row["id"],),
@@ -171,3 +183,12 @@ class Repository:
             (str(account_id), str(month)),
         ).fetchone()
         return row is not None
+
+
+def _account(row: sqlite3.Row) -> Account:
+    return Account(
+        id=UUID(row["id"]),
+        owner=row["owner"],
+        institution=row["institution"],
+        kind=AccountKind(row["kind"]),
+    )

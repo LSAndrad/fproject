@@ -62,6 +62,10 @@ class TestAccounts:
     def test_missing_account_returns_none(self, repo):
         assert repo.get_account(uuid4()) is None
 
+    def test_find_by_owner_institution_kind(self, repo, account):
+        assert repo.find_account("alice", "Acme Bank", AccountKind.CHECKING) == account
+        assert repo.find_account("alice", "Acme Bank", AccountKind.CREDIT_CARD) is None
+
     def test_rejects_duplicate_owner_institution_kind(self, repo, account):
         duplicate = Account(owner="alice", institution="Acme Bank", kind=AccountKind.CHECKING)
         with pytest.raises(sqlite3.IntegrityError):
@@ -99,6 +103,15 @@ class TestStatements:
         repo.save_statement(make_statement(account, Month(2026, 9)))
         repo.save_statement(make_statement(account, Month(2026, 10)))
         assert repo.get_statement(account.id, Month(2026, 10)) is not None
+
+    def test_lists_statements_of_a_month_across_accounts(self, repo, account):
+        other = Account(owner="bob", institution="Acme Bank", kind=AccountKind.CHECKING)
+        repo.save_account(other)
+        repo.save_statement(make_statement(account))
+        repo.save_statement(make_statement(other))
+        repo.save_statement(make_statement(account, Month(2026, 10)))
+        listed = repo.list_statements(SEPTEMBER)
+        assert [s.account_id for s in listed] == [account.id, other.id]
 
     def test_requires_existing_account(self, repo):
         orphan = Account(owner="carol", institution="Acme Bank", kind=AccountKind.CHECKING)

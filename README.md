@@ -50,7 +50,7 @@ flowchart LR
 - [x] `Extractor` interface and reconciliation
 - [x] Counterparty details on transactions (who a transfer went to)
 - [x] Spreadsheet extractor: configurable columns, split by month, row-level balance check
-- [ ] `import` and monthly `summary` commands
+- [x] `import` and monthly `summary` commands
 - [ ] LLM-based PDF extractor for complex layouts (e.g. credit card bills)
 
 **Phase 2: Categorization**
@@ -77,6 +77,44 @@ flowchart LR
 - [ ] Housing advisor: compare current housing cost against market and financing options
 - [ ] Spending coach for recurring categories such as food
 - [ ] Investment buckets
+
+## Usage
+
+Export your checking account as a spreadsheet (`.xlsx`) from your bank and import it.
+A file covering several months becomes one statement per month. With the synthetic
+export used in the tests:
+
+```console
+$ uv run fproject import statement.xlsx --owner jane --institution "Acme Bank"
+jane · Acme Bank (checking)
+  2026-08     2 transactions  imported
+  2026-09     3 transactions  imported
+  2026-10     1 transactions  skipped: month not over yet
+```
+
+Then see what came in, what went out, and where it went:
+
+```console
+$ uv run fproject summary 2026-09
+2026-09 · jane · Acme Bank (checking)
+
+  Opening balance        R$ 2.000,00
+  In                     R$ 4.000,00
+  Out                     -R$ 850,00
+  Net                    R$ 3.150,00
+  Closing balance        R$ 5.150,00
+
+  Where the money went
+    1. Pagamento de boleto · Building Condo       -R$ 600,00
+    2. Pix enviado · Green Grocer                 -R$ 250,00
+```
+
+Import rules:
+- Every month must reconcile, row by row, or nothing from the file is imported.
+- A month is imported once. Overlapping exports are fine: months already imported are skipped.
+- The current month is skipped until it ends, so a partial month never blocks the complete one.
+
+Data is stored in `data/fproject.db` (ignored by git); set `FPROJECT_DB` or pass `--db` to change it.
 
 ## Development
 
