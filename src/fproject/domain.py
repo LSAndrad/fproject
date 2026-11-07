@@ -84,6 +84,8 @@ class Transaction:
     # Extra context the bank gives next to the description, typically the
     # counterparty of a transfer ("Pix sent" -> who received it).
     details: str | None = None
+    # Who made a credit card purchase: a bill can cover additional cards.
+    cardholder: str | None = None
     id: UUID = field(default_factory=uuid4)
 
     def __post_init__(self) -> None:
@@ -92,8 +94,10 @@ class Transaction:
             raise ValueError("amount_cents must not be zero")
         if not self.description.strip():
             raise ValueError("description must not be blank")
-        if self.details is not None and not self.details.strip():
-            raise ValueError("details must be None rather than blank")
+        for name in ("details", "cardholder"):
+            value = getattr(self, name)
+            if value is not None and not value.strip():
+                raise ValueError(f"{name} must be None rather than blank")
 
     @property
     def direction(self) -> Direction:

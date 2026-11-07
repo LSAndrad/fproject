@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     posted_on    TEXT NOT NULL,     -- ISO date
     description  TEXT NOT NULL,
     details      TEXT,
+    cardholder   TEXT,
     amount_cents INTEGER NOT NULL CHECK (amount_cents <> 0),
     UNIQUE (statement_id, position)
 ) STRICT;
@@ -119,8 +120,9 @@ class Repository:
             self._conn.executemany(
                 """
                 INSERT INTO transactions
-                    (id, statement_id, position, posted_on, description, details, amount_cents)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (id, statement_id, position, posted_on, description, details, cardholder,
+                     amount_cents)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -130,6 +132,7 @@ class Repository:
                         t.posted_on.isoformat(),
                         t.description,
                         t.details,
+                        t.cardholder,
                         t.amount_cents,
                     )
                     for position, t in enumerate(statement.transactions)
@@ -171,6 +174,7 @@ class Repository:
                     posted_on=date.fromisoformat(t["posted_on"]),
                     description=t["description"],
                     details=t["details"],
+                    cardholder=t["cardholder"],
                     amount_cents=t["amount_cents"],
                 )
                 for t in transactions

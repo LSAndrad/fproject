@@ -75,6 +75,12 @@ class TestTransaction:
     def test_details_are_optional(self):
         assert make_transaction().details is None
 
+    def test_rejects_blank_cardholder(self):
+        with pytest.raises(ValueError):
+            Transaction(
+                posted_on=date(2026, 9, 3), description="SHOP", amount_cents=-1000, cardholder=""
+            )
+
     def test_rejects_blank_details(self):
         with pytest.raises(ValueError):
             Transaction(

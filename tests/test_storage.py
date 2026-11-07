@@ -39,7 +39,12 @@ def make_statement(account: Account, month: Month = SEPTEMBER, **overrides) -> S
             details="JOHN LANDLORD",
             amount_cents=-180000,
         ),
-        Transaction(posted_on=date(2026, 9, 5), description="GROCERIES", amount_cents=-35090),
+        Transaction(
+            posted_on=date(2026, 9, 5),
+            description="GROCERIES",
+            cardholder="JANE DOE",
+            amount_cents=-35090,
+        ),
     ]
     values = {
         "account_id": account.id,
@@ -141,7 +146,7 @@ class TestSchema:
         repo.save_statement(statement)
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute(
-                "INSERT INTO transactions VALUES (?, ?, 0, '2026-09-01', 'X', NULL, 0)",
+                "INSERT INTO transactions VALUES (?, ?, 0, '2026-09-01', 'X', NULL, NULL, 0)",
                 (str(uuid4()), str(statement.id)),
             )
 
@@ -150,7 +155,7 @@ class TestSchema:
         repo.save_statement(statement)
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute(
-                "INSERT INTO transactions VALUES (?, ?, 0, '2026-09-01', 'X', NULL, 19.9)",
+                "INSERT INTO transactions VALUES (?, ?, 0, '2026-09-01', 'X', NULL, NULL, 19.9)",
                 (str(uuid4()), str(statement.id)),
             )
 
