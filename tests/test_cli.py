@@ -1,9 +1,11 @@
 """End to end: the commands as a user runs them, against a real database file."""
 
+import json
 from datetime import date
+from pathlib import Path
 
 import pytest
-from sample_statements import NEWEST_FIRST, write_xlsx
+from sample_statements import CARD_BILL, NEWEST_FIRST, write_xlsx
 
 from fproject.cli import main
 
@@ -71,3 +73,31 @@ def test_reports_unreadable_spreadsheet(db, tmp_path, capsys):
     path = write_xlsx(tmp_path / "s.xlsx", NEWEST_FIRST, header=("Date", "Memo"))
     assert run(db, *import_args(str(path))) == 1
     assert "no header row" in capsys.readouterr().err
+
+
+def write_card_bill(tmp_path, closing=-312345):
+    statement = {**CARD_BILL["statements"][0], "closing_balance_cents": closing}
+    path = tmp_path / "bill.json"
+    path.write_text(json.dumps({**CARD_BILL, "statements": [statement]}), encoding="utf-8")
+    return str(path)
+
+
+def test_check_reports_reconciled_months_without_storing(db, statement_file, capsys):
+    assert main(["--db", db, "check", statement_file]) == 0
+    out = capsys.readouterr().out
+    assert out.count("reconciles") == 3
+    assert not Path(db).exists()
+
+
+def test_check_fails_on_unbalanced_statement(db, tmp_path, capsys):
+    assert main(["--db", db, "check", write_card_bill(tmp_path, closing=-312000)]) == 1
+    assert "DOES NOT RECONCILE (difference R$ 3,45)" in capsys.readouterr().out
+
+
+def test_imports_credit_card_bill_from_json(db, tmp_path, capsys):
+    args = ["import", write_card_bill(tmp_path), "--owner", "jane", "--institution", "Acme Bank"]
+    # The bill is for the current month: card bills are closed when issued.
+    assert run(db, *args, "--kind", "credit_card", today=date(2026, 9, 15)) == 0
+    out = capsys.readouterr().out
+    assert "jane · Acme Bank (credit_card)" in out
+    assert "2026-09     3 transactions  imported" in out

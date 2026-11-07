@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from enum import StrEnum
 
-from fproject.domain import Account, Month, Statement
+from fproject.domain import Account, AccountKind, Month, Statement
 from fproject.reconciliation import reconcile
 from fproject.storage import Repository, StatementAlreadyImported
 
@@ -36,8 +36,9 @@ def import_statements(
     """Store every statement of a file, skipping months that can't be imported yet.
 
     All statements are reconciled before any is stored, so a file with one bad
-    month imports nothing. A month that has not ended is skipped: importing it
-    now would block importing the complete month later.
+    month imports nothing. For checking accounts, a month that has not ended
+    is skipped: importing it now would block importing the complete month
+    later. A credit card bill is already closed when it is issued.
     """
     for statement in statements:
         reconcile(statement)
@@ -45,7 +46,7 @@ def import_statements(
     current = Month(today.year, today.month)
     report = ImportReport(account)
     for statement in statements:
-        if statement.month >= current:
+        if account.kind is AccountKind.CHECKING and statement.month >= current:
             outcome = Outcome.MONTH_NOT_OVER
         else:
             try:

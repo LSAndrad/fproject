@@ -88,3 +88,13 @@ def test_get_or_create_saves_new_account(repo):
     new = Account(id=uuid4(), owner="bob", institution="Acme Bank", kind=AccountKind.CHECKING)
     assert get_or_create_account(repo, new) == new
     assert repo.get_account(new.id) == new
+
+
+def test_imports_current_month_of_a_credit_card(repo):
+    card = get_or_create_account(
+        repo, Account(owner="alice", institution="Acme Bank", kind=AccountKind.CREDIT_CARD)
+    )
+    report = import_statements(
+        repo, card, [make_statement(card, Month(2026, 10))], date(2026, 10, 15)
+    )
+    assert outcomes(report) == {"2026-10": Outcome.IMPORTED}

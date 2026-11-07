@@ -4,6 +4,8 @@ from pathlib import Path
 
 from openpyxl import Workbook
 
+from fproject.extractors.json_statement import FORMAT
+
 HEADER = ("Data", "Descrição", "Detalhe", "Valor", "Saldo")
 
 # A checking account, newest first like real bank exports.
@@ -32,3 +34,36 @@ def write_xlsx(path: Path, rows=NEWEST_FIRST, header=HEADER, preamble=True) -> P
         sheet.append(row)
     workbook.save(path)
     return path
+
+
+# A credit card bill in the JSON interchange format; reconciles.
+CARD_BILL = {
+    "format": FORMAT,
+    "statements": [
+        {
+            "month": "2026-09",
+            "opening_balance_cents": -250000,
+            "closing_balance_cents": -312345,
+            "transactions": [
+                {
+                    "posted_on": "2026-08-10",
+                    "description": "PAYMENT RECEIVED",
+                    "amount_cents": 250000,
+                },
+                {
+                    "posted_on": "2026-08-12",
+                    "description": "CORNER BAKERY",
+                    "details": "installment 2/3",
+                    "cardholder": "JANE DOE",
+                    "amount_cents": -300000,
+                },
+                {
+                    "posted_on": "2026-08-20",
+                    "description": "BOOKSTORE",
+                    "cardholder": "JOHN DOE",
+                    "amount_cents": -12345,
+                },
+            ],
+        }
+    ],
+}

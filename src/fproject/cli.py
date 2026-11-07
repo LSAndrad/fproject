@@ -1,4 +1,4 @@
-"""Command line interface: `fproject import` and `fproject summary`."""
+"""Command line interface: check, import and summarize statements."""
 
 from __future__ import annotations
 
@@ -7,13 +7,13 @@ import os
 import sys
 from datetime import date
 from pathlib import Path
+from uuid import uuid4
 
 from fproject.domain import Account, AccountKind, Month
-from fproject.extractors import Extractor
-from fproject.extractors.spreadsheet import SpreadsheetError, SpreadsheetExtractor
+from fproject.extractors import ExtractionError, extractor_for
 from fproject.importer import get_or_create_account, import_statements
 from fproject.money import format_brl
-from fproject.reconciliation import ReconciliationError
+from fproject.reconciliation import ReconciliationError, reconcile
 from fproject.storage import Repository, connect
 from fproject.summary import summarize
 
@@ -26,20 +26,23 @@ class UsageError(Exception):
 
 def main(argv: list[str] | None = None, today: date | None = None) -> int:
     args = _parser().parse_args(argv)
-    db_path = Path(args.db)
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = connect(db_path)
     try:
-        repo = Repository(conn)
-        if args.command == "import":
-            _import(repo, args, today or date.today())
-        else:
-            _summary(repo, args)
-    except (UsageError, SpreadsheetError, ReconciliationError) as error:
+        if args.command == "check":
+            return _check(args)
+        db_path = Path(args.db)
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = connect(db_path)
+        try:
+            repo = Repository(conn)
+            if args.command == "import":
+                _import(repo, args, today or date.today())
+            else:
+                _summary(repo, args)
+        finally:
+            conn.close()
+    except (UsageError, ExtractionError, ReconciliationError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
-    finally:
-        conn.close()
     return 0
 
 
@@ -51,6 +54,11 @@ def _parser() -> argparse.ArgumentParser:
         help="SQLite database file (default: $FPROJECT_DB or %(default)s)",
     )
     commands = parser.add_subparsers(dest="command", required=True)
+
+    check = commands.add_parser(
+        "check", help="extract and reconcile a statement file without storing it"
+    )
+    check.add_argument("file", type=Path)
 
     imp = commands.add_parser("import", help="import a statement file")
     imp.add_argument("file", type=Path)
@@ -66,10 +74,28 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _extractor_for(path: Path) -> Extractor:
-    if path.suffix.lower() == ".xlsx":
-        return SpreadsheetExtractor()
-    raise UsageError(f"unsupported file type: {path.suffix or path.name} (supported: .xlsx)")
+def _check(args: argparse.Namespace) -> int:
+    """Print each month's totals and whether it reconciles. Exit 1 if any does not."""
+    if not args.file.is_file():
+        raise UsageError(f"file not found: {args.file}")
+    statements = extractor_for(args.file).extract(args.file, uuid4())
+    failures = 0
+    for s in statements:
+        try:
+            reconcile(s)
+            status = "reconciles"
+        except ReconciliationError as error:
+            failures += 1
+            status = f"DOES NOT RECONCILE (difference {format_brl(error.difference_cents)})"
+        print(
+            f"{s.month}  {len(s.transactions):>4} transactions  "
+            f"opening {format_brl(s.opening_balance_cents)}  in {format_brl(s.inflow_cents)}  "
+            f"out {format_brl(s.outflow_cents)}  closing {format_brl(s.closing_balance_cents)}  "
+            f"{status}"
+        )
+    if not statements:
+        print("no transactions found")
+    return 1 if failures else 0
 
 
 def _import(repo: Repository, args: argparse.Namespace, today: date) -> None:
@@ -79,7 +105,7 @@ def _import(repo: Repository, args: argparse.Namespace, today: date) -> None:
         repo,
         Account(owner=args.owner, institution=args.institution, kind=AccountKind(args.kind)),
     )
-    statements = _extractor_for(args.file).extract(args.file, account.id)
+    statements = extractor_for(args.file).extract(args.file, account.id)
     report = import_statements(repo, account, statements, today)
 
     print(f"{account.owner} · {account.institution} ({account.kind})")

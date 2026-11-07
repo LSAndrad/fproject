@@ -17,10 +17,11 @@ from uuid import UUID
 from openpyxl import load_workbook
 
 from fproject.domain import Month, Statement, Transaction
+from fproject.extractors import ExtractionError
 from fproject.money import format_brl, parse_brl
 
 
-class SpreadsheetError(ValueError):
+class SpreadsheetError(ExtractionError):
     """The spreadsheet could not be read as a statement."""
 
 
