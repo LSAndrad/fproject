@@ -1,14 +1,16 @@
-"""Command line interface: check, import and summarize statements."""
+"""Command line interface: check, import, categorize and summarize statements."""
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from datetime import date
 from pathlib import Path
 from uuid import uuid4
 
+from fproject.categorization import Categorizer, SuggestionsError
 from fproject.domain import Account, AccountKind, Month
 from fproject.extractors import ExtractionError, extractor_for
 from fproject.importer import get_or_create_account, import_statements
@@ -35,12 +37,14 @@ def main(argv: list[str] | None = None, today: date | None = None) -> int:
         try:
             repo = Repository(conn)
             if args.command == "import":
-                _import(repo, args, today or date.today())
+                _import(repo, Categorizer(conn), args, today or date.today())
+            elif args.command == "categorize":
+                _categorize(Categorizer(conn), args)
             else:
                 _summary(repo, args)
         finally:
             conn.close()
-    except (UsageError, ExtractionError, ReconciliationError) as error:
+    except (UsageError, ExtractionError, ReconciliationError, SuggestionsError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
     return 0
@@ -67,6 +71,16 @@ def _parser() -> argparse.ArgumentParser:
     imp.add_argument(
         "--kind", choices=[k.value for k in AccountKind], default=AccountKind.CHECKING.value
     )
+
+    categorize = commands.add_parser(
+        "categorize", help="hand payees to an assistant for categorization and apply its answer"
+    )
+    steps = categorize.add_subparsers(dest="step", required=True)
+    export = steps.add_parser("export", help="write the payees awaiting review as JSON")
+    export.add_argument("month", type=Month.parse, help="YYYY-MM")
+    export.add_argument("-o", "--output", type=Path, help="file to write (default: stdout)")
+    apply = steps.add_parser("apply", help="store suggestions (unconfirmed) from a JSON file")
+    apply.add_argument("file", type=Path)
 
     summary = commands.add_parser("summary", help="show what came in and went out in a month")
     summary.add_argument("month", type=Month.parse, help="YYYY-MM")
@@ -98,7 +112,9 @@ def _check(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
-def _import(repo: Repository, args: argparse.Namespace, today: date) -> None:
+def _import(
+    repo: Repository, categorizer: Categorizer, args: argparse.Namespace, today: date
+) -> None:
     if not args.file.is_file():
         raise UsageError(f"file not found: {args.file}")
     account = get_or_create_account(
@@ -113,6 +129,27 @@ def _import(repo: Repository, args: argparse.Namespace, today: date) -> None:
         print("  no transactions found")
     for result in report.months:
         print(f"  {result.month}  {result.transactions:>4} transactions  {result.outcome}")
+    categorized = categorizer.apply_rules()
+    if categorized:
+        print(f"  {categorized} transactions categorized by your rules")
+
+
+def _categorize(categorizer: Categorizer, args: argparse.Namespace) -> None:
+    if args.step == "export":
+        text = json.dumps(categorizer.export_request(args.month), ensure_ascii=False, indent=1)
+        if args.output:
+            args.output.write_text(text + "\n", encoding="utf-8")
+        else:
+            print(text)
+        return
+    if not args.file.is_file():
+        raise UsageError(f"file not found: {args.file}")
+    try:
+        document = json.loads(args.file.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise UsageError(f"invalid JSON: {error}") from error
+    written = categorizer.apply_suggestions(document)
+    print(f"{written} transactions received a suggestion; confirm them in the review screen")
 
 
 def _summary(repo: Repository, args: argparse.Namespace) -> None:

@@ -8,6 +8,7 @@ import pytest
 from sample_statements import CARD_BILL, NEWEST_FIRST, write_xlsx
 
 from fproject.cli import main
+from fproject.domain import Month
 
 NOVEMBER_FIRST = date(2026, 11, 1)
 
@@ -101,3 +102,52 @@ def test_imports_credit_card_bill_from_json(db, tmp_path, capsys):
     out = capsys.readouterr().out
     assert "jane · Acme Bank (credit_card)" in out
     assert "2026-09     3 transactions  imported" in out
+
+
+def test_categorize_export_and_apply(db, statement_file, tmp_path, capsys):
+    run(db, *import_args(statement_file))
+    request_path = tmp_path / "request.json"
+    assert run(db, "categorize", "export", "2026-09", "-o", str(request_path)) == 0
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    payees = {p["payee"] for p in request["payees"]}
+    assert "pix enviado · green grocer" in payees
+
+    answer = tmp_path / "answer.json"
+    answer.write_text(
+        json.dumps(
+            {
+                "format": "fproject.categorization-suggestions/v1",
+                "month": "2026-09",
+                "suggestions": [
+                    {
+                        "payee": "pix enviado · green grocer",
+                        "category": "groceries",
+                        "scope": "household",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    capsys.readouterr()
+    assert run(db, "categorize", "apply", str(answer)) == 0
+    assert "1 transactions received a suggestion" in capsys.readouterr().out
+
+
+def test_import_applies_existing_rules(db, tmp_path, capsys):
+    from fproject.categories import Scope
+    from fproject.categorization import Categorizer
+    from fproject.storage import connect
+
+    first = write_xlsx(tmp_path / "september.xlsx", NEWEST_FIRST[1:4])
+    run(db, *import_args(str(first)))
+    conn = connect(db)
+    Categorizer(conn).confirm(
+        Month(2026, 9), "pix enviado · green grocer", "groceries", Scope.HOUSEHOLD
+    )
+    conn.close()
+    # October has a new statement with a payee that already has a rule.
+    october = [("02/10/2026", "Pix enviado", "Green Grocer", "-R$ 12,50", "R$ 5.137,50")]
+    capsys.readouterr()
+    run(db, *import_args(str(write_xlsx(tmp_path / "october.xlsx", october))))
+    assert "1 transactions categorized by your rules" in capsys.readouterr().out
