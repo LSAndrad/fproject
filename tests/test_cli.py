@@ -151,3 +151,13 @@ def test_import_applies_existing_rules(db, tmp_path, capsys):
     capsys.readouterr()
     run(db, *import_args(str(write_xlsx(tmp_path / "october.xlsx", october))))
     assert "1 transactions categorized by your rules" in capsys.readouterr().out
+
+
+def test_close_month(db, statement_file, capsys):
+    run(db, *import_args(statement_file))
+    capsys.readouterr()
+    assert run(db, "close", "2026-09") == 0
+    out = capsys.readouterr().out
+    assert "3 transactions still need review" in out
+    assert "Uncategorized" in out and "-R$ 850,00" in out
+    assert "uncategorized inflows: R$ 4.000,00" in out

@@ -11,6 +11,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fproject.categorization import Categorizer, SuggestionsError
+from fproject.closing import close_month
 from fproject.domain import Account, AccountKind, Month
 from fproject.extractors import ExtractionError, extractor_for
 from fproject.importer import get_or_create_account, import_statements
@@ -40,6 +41,8 @@ def main(argv: list[str] | None = None, today: date | None = None) -> int:
                 _import(repo, Categorizer(conn), args, today or date.today())
             elif args.command == "categorize":
                 _categorize(Categorizer(conn), args)
+            elif args.command == "close":
+                _close(Categorizer(conn), args)
             else:
                 _summary(repo, args)
         finally:
@@ -81,6 +84,11 @@ def _parser() -> argparse.ArgumentParser:
     export.add_argument("-o", "--output", type=Path, help="file to write (default: stdout)")
     apply = steps.add_parser("apply", help="store suggestions (unconfirmed) from a JSON file")
     apply.add_argument("file", type=Path)
+
+    close = commands.add_parser(
+        "close", help="monthly closing across accounts: income, spending, what was left"
+    )
+    close.add_argument("month", type=Month.parse, help="YYYY-MM")
 
     summary = commands.add_parser("summary", help="show what came in and went out in a month")
     summary.add_argument("month", type=Month.parse, help="YYYY-MM")
@@ -150,6 +158,42 @@ def _categorize(categorizer: Categorizer, args: argparse.Namespace) -> None:
         raise UsageError(f"invalid JSON: {error}") from error
     written = categorizer.apply_suggestions(document)
     print(f"{written} transactions received a suggestion; confirm them in the review screen")
+
+
+def _close(categorizer: Categorizer, args: argparse.Namespace) -> None:
+    entries = categorizer.entries(args.month)
+    if not entries:
+        raise UsageError(f"no statements imported for {args.month}")
+    c = close_month(args.month, entries)
+
+    print(f"\nClosing {args.month}\n")
+    if c.pending:
+        print(f"  {c.pending} transactions still need review: numbers are partial\n")
+    for label, cents in [
+        ("Income", c.income_cents),
+        ("Spending", -c.expenses_cents),
+        ("Left over", c.left_over_cents),
+        ("  of which saved", c.saved_cents),
+    ]:
+        print(f"  {label:<18}{format_brl(cents):>16}")
+
+    print("\n  Spending by category")
+    for cat in c.by_category:
+        share = f"{cat.spent_cents * 100 // c.expenses_cents:>3}%" if c.expenses_cents else ""
+        print(f"    {cat.label:<26}{format_brl(-cat.spent_cents):>16}  {share}")
+
+    notes = []
+    if c.card_detailed:
+        notes.append(
+            f"card bills replaced by their items: {format_brl(c.card_bills_replaced_cents)}"
+        )
+    if c.transfers_cents:
+        notes.append(f"internal transfers left out: {format_brl(c.transfers_cents)}")
+    if c.uncategorized_inflow_cents:
+        notes.append(f"uncategorized inflows: {format_brl(c.uncategorized_inflow_cents)}")
+    for note in notes:
+        print(f"\n  {note}", end="")
+    print("\n")
 
 
 def _summary(repo: Repository, args: argparse.Namespace) -> None:
