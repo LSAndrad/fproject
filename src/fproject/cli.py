@@ -32,6 +32,8 @@ def main(argv: list[str] | None = None, today: date | None = None) -> int:
     try:
         if args.command == "check":
             return _check(args)
+        if args.command == "web":
+            return _web(args)
         db_path = Path(args.db)
         db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = connect(db_path)
@@ -61,6 +63,9 @@ def _parser() -> argparse.ArgumentParser:
         help="SQLite database file (default: $FPROJECT_DB or %(default)s)",
     )
     commands = parser.add_subparsers(dest="command", required=True)
+
+    web = commands.add_parser("web", help="open the local web interface")
+    web.add_argument("--port", type=int, default=8000)
 
     check = commands.add_parser(
         "check", help="extract and reconcile a statement file without storing it"
@@ -94,6 +99,17 @@ def _parser() -> argparse.ArgumentParser:
     summary.add_argument("month", type=Month.parse, help="YYYY-MM")
     summary.add_argument("--top", type=int, default=10, help="how many payees to list")
     return parser
+
+
+def _web(args: argparse.Namespace) -> int:
+    import uvicorn
+
+    from fproject.web import create_app
+
+    print(f"fproject on http://127.0.0.1:{args.port}  (database: {args.db})")
+    # Localhost only: the data never needs to leave the machine.
+    uvicorn.run(create_app(Path(args.db)), host="127.0.0.1", port=args.port, log_level="warning")
+    return 0
 
 
 def _check(args: argparse.Namespace) -> int:

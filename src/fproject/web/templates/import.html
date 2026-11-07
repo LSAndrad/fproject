@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Import · fproject{% endblock %}
+{% block content %}
+<p class="eyebrow">Ingestion</p>
+<h1>Import a statement</h1>
+
+{% if error %}
+  <div class="notice error"><strong>Nothing was imported.</strong> {{ error }}</div>
+{% endif %}
+
+{% if report %}
+  <div class="notice ok">
+    <strong>{{ filename }}</strong> · {{ report.account.owner }} · {{ report.account.institution }} ({{ report.account.kind }})
+    <ul class="plain">
+      {% for r in report.months %}
+        <li>
+          <span class="mono">{{ r.month }}</span> · {{ r.transactions }} transactions · {{ r.outcome }}
+          {% if r.outcome == "imported" %} · <a href="/review/{{ r.month }}">review</a>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+    {% if categorized %}<p>{{ categorized }} transactions categorized by your rules.</p>{% endif %}
+  </div>
+{% endif %}
+
+<form class="card" method="post" action="/import" enctype="multipart/form-data">
+  <fieldset class="kinds">
+    <legend>What are you importing?</legend>
+    <label><input type="radio" name="kind" value="checking" checked>
+      <span><strong>Checking account</strong><small>Spreadsheet export (.xlsx). Income, spending and card bill payments.</small></span></label>
+    <label><input type="radio" name="kind" value="credit_card">
+      <span><strong>Credit card bill</strong><small>JSON made from the PDF with the extract-card-bill skill. The actual purchases.</small></span></label>
+  </fieldset>
+  <div class="row">
+    <label>Owner<input name="owner" list="owners" required placeholder="e.g. jane"></label>
+    <label>Bank<input name="institution" list="institutions" required placeholder="e.g. Acme Bank"></label>
+  </div>
+  <datalist id="owners">{% for a in accounts|unique(attribute="owner") %}<option value="{{ a.owner }}">{% endfor %}</datalist>
+  <datalist id="institutions">{% for a in accounts|unique(attribute="institution") %}<option value="{{ a.institution }}">{% endfor %}</datalist>
+  <label>File<input type="file" name="file" accept=".xlsx,.json" required></label>
+  <button type="submit">Import</button>
+  <p class="hint">Every month must reconcile or nothing is stored. Months already imported are skipped; the current month of a checking account is skipped until it ends.</p>
+</form>
+{% endblock %}

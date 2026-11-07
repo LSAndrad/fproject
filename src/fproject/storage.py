@@ -57,9 +57,13 @@ class StatementAlreadyImported(Exception):
         self.month = month
 
 
-def connect(path: str | Path = ":memory:") -> sqlite3.Connection:
-    """Open a database and make sure the schema exists."""
-    conn = sqlite3.connect(path)
+def connect(path: str | Path = ":memory:", check_same_thread: bool = True) -> sqlite3.Connection:
+    """Open a database and make sure the schema exists.
+
+    The web app passes check_same_thread=False: each request has its own
+    connection, but the framework may open and use it on different threads.
+    """
+    conn = sqlite3.connect(path, check_same_thread=check_same_thread)
     conn.row_factory = sqlite3.Row
     # SQLite does not enforce foreign keys unless asked to, per connection.
     conn.execute("PRAGMA foreign_keys = ON")

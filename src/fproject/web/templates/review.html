@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Review {{ month }} · fproject{% endblock %}
+{% block content %}
+<p class="eyebrow">Categorization · {{ month }}</p>
+<h1>Review</h1>
+
+{% if saved is not none %}
+  <div class="notice ok">{{ saved }} transactions categorized. Each confirmed payee is now a rule for future imports.</div>
+{% endif %}
+
+{% if not groups %}
+  <div class="card empty">
+    <p><strong>Nothing to review.</strong> Every transaction of {{ month }} is categorized.</p>
+    <a href="/close/{{ month }}">See the closing →</a>
+  </div>
+{% else %}
+  <p class="hint">One decision per payee. Rows prefilled by the assistant are suggestions: they only count as confirmed after you save. Leave the category empty to decide later.</p>
+  <form method="post" action="/review/{{ month }}">
+    <table class="review">
+      <thead><tr><th>Payee</th><th class="num">Total</th><th>Category</th><th>Scope</th></tr></thead>
+      <tbody>
+      {% for g in groups %}
+        {% set suggestion = g.suggestion %}
+        <tr>
+          <td>
+            <input type="hidden" name="payee_{{ loop.index }}" value="{{ g.payee_key }}">
+            <span class="payee">{{ g.label }}</span>
+            <small>
+              {{ "card" if g.account_kind == "credit_card" else "checking" }} · {{ g.count }}×
+              {% if g.cardholders %} · {{ g.cardholders|join(", ") }}{% endif %}
+              {% if suggestion %} · <span class="tag">suggested</span>{% endif %}
+            </small>
+          </td>
+          <td class="num {{ 'in' if g.total_cents > 0 else '' }}">{{ g.total_cents|brl }}</td>
+          <td>
+            <select name="category_{{ loop.index }}">
+              <option value="">—</option>
+              {% for c in categories %}
+                <option value="{{ c.key }}" {% if suggestion and suggestion[0] == c.key %}selected{% endif %}>{{ c.label }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td>
+            <select name="scope_{{ loop.index }}">
+              {% for s in scopes %}
+                <option value="{{ s }}" {% if suggestion and suggestion[1] == s %}selected{% endif %}>{{ s }}</option>
+              {% endfor %}
+            </select>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <div class="actions">
+      <button type="submit">Save</button>
+      <a href="/close/{{ month }}">Closing →</a>
+    </div>
+  </form>
+{% endif %}
+{% endblock %}

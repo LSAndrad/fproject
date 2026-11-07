@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Closing {{ month }} · fproject{% endblock %}
+{% block content %}
+<p class="eyebrow">Monthly closing</p>
+<h1>{{ month }}</h1>
+
+{% if c.pending %}
+  <div class="notice warn">{{ c.pending }} transactions still need review: numbers are partial. <a href="/review/{{ month }}">Review →</a></div>
+{% endif %}
+
+<section class="stats">
+  <div class="stat"><span>Income</span><strong>{{ c.income_cents|brl }}</strong></div>
+  <div class="stat"><span>Spending</span><strong>{{ (-c.expenses_cents)|brl }}</strong></div>
+  <div class="stat {{ 'neg' if c.left_over_cents < 0 else 'pos' }}"><span>Left over</span><strong>{{ c.left_over_cents|brl }}</strong>
+    {% if c.saved_cents %}<small>{{ c.saved_cents|brl }} of it saved</small>{% endif %}</div>
+</section>
+
+<div class="grid">
+  <section class="card">
+    <h2>Spending by category</h2>
+    {% if not c.by_category %}<p class="hint">No spending this month.</p>{% endif %}
+    <ul class="bars">
+      {% for cat in c.by_category %}
+        {% set pct = (cat.spent_cents * 100 / c.expenses_cents) if c.expenses_cents > 0 else 0 %}
+        <li>
+          <div class="bar-label"><span>{{ cat.label }}</span><span class="num">{{ (-cat.spent_cents)|brl }} · {{ pct|round|int }}%</span></div>
+          <div class="bar"><div style="width: {{ [pct, 0]|max }}%"></div></div>
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Personal vs household</h2>
+    <dl class="pairs">
+      {% for s in scopes %}
+        <dt>{{ s }}</dt><dd class="num">{{ (-(c.by_scope.get(s, 0)))|brl }}</dd>
+      {% endfor %}
+    </dl>
+
+    <h2>Accounts</h2>
+    <table class="compact">
+      <thead><tr><th>Account</th><th class="num">In</th><th class="num">Out</th></tr></thead>
+      <tbody>
+      {% for a in c.accounts %}
+        <tr><td>{{ a.owner }} · {{ a.institution }} <small>{{ a.kind }}</small></td>
+          <td class="num">{{ a.inflow_cents|brl }}</td><td class="num">{{ a.outflow_cents|brl }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <ul class="plain notes">
+      {% if c.card_detailed %}<li>Card bill payments replaced by the bills' items: {{ c.card_bills_replaced_cents|brl }}</li>
+      {% else %}<li>No card bill imported this month: a bill payment counts as one expense.</li>{% endif %}
+      {% if c.transfers_cents %}<li>Internal transfers left out: {{ c.transfers_cents|brl }}</li>{% endif %}
+      {% if c.uncategorized_inflow_cents %}<li>Uncategorized inflows, not counted as income: {{ c.uncategorized_inflow_cents|brl }}</li>{% endif %}
+    </ul>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Largest expenses</h2>
+  <table class="compact">
+    <tbody>
+    {% for e in c.top_expenses %}
+      <tr><td class="mono">{{ e.posted_on.strftime("%d/%m") }}</td><td>{{ e.payee_label }}
+        <small>{{ e.category or "uncategorized" }}{% if e.cardholder %} · {{ e.cardholder }}{% endif %}</small></td>
+        <td class="num">{{ e.amount_cents|brl }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
