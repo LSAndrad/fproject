@@ -2,7 +2,7 @@
 
 **Local-first personal finance.** Import your monthly bank statements, see where your money goes, and plan for what you want next.
 
-> 🚧 Early development. The project is being built in small, reviewable steps; see the [roadmap](#roadmap).
+> 🚧 v0.1: usable for importing, categorizing and closing a month. Built in small, reviewable steps; see the [roadmap](#roadmap).
 
 ## Why
 
@@ -13,34 +13,72 @@ Banking apps show transactions. They don't answer the questions that matter at t
 - Am I within the limits I set for myself (e.g. food delivery)?
 - I want to travel to Japan in 8 months for R$ 40,000. Is that feasible, and what has to give?
 
-fproject answers these from your own statements, on your own machine. Your financial data never leaves your computer unless you choose an extractor that sends it somewhere.
+fproject answers these from your own statements, on your own machine.
 
 ## How it works
 
 ```mermaid
 flowchart LR
-    F[Statement file<br/>spreadsheet / PDF] --> X{Extractor}
-    X -->|structured| S[Spreadsheet parser]
-    X -->|complex layout| L[LLM extractor]
-    S & L --> R[Reconciliation<br/>opening + Σ tx = closing]
+    X[Checking account<br/>.xlsx] --> S[Spreadsheet parser]
+    P[Credit card bill<br/>PDF] --> A[Assistant<br/>Claude Code skill] --> J[Statement JSON]
+    S & J --> R[Reconciliation<br/>opening + Σ tx = closing]
     R -->|balances match| DB[(Ledger<br/>SQLite)]
     R -->|mismatch| E[Rejected]
-    DB --> C[Categorization]
-    C --> A[Monthly insights<br/>budgets · goals]
+    DB --> C[Categorization<br/>per payee · rules · suggestions]
+    C --> M[Monthly closing]
 ```
 
-1. **Ingestion.** Every bank format sits behind a single `Extractor` interface. A file goes in; a statement with its transactions comes out. New banks mean new extractors, not changes to the core. Structured formats get a deterministic parser (free, fast, testable); complex PDF layouts such as credit card bills go through an LLM, whose output is then held to the same reconciliation.
-2. **Reconciliation.** Before anything is stored, the transactions must add up to the statement's own totals. This is what makes any extractor trustworthy, including an LLM one.
+1. **Ingestion.** Every format sits behind one `Extractor` interface. Structured exports get a deterministic parser. Layouts no parser handles, like credit card bill PDFs, are turned into a documented JSON format by an assistant ([the skill](.claude/skills/extract-card-bill/SKILL.md)), and later by an API-based extractor writing the same JSON.
+2. **Reconciliation.** Before anything is stored, the transactions must add up to the statement's own totals (row by row when the bank provides a running balance). This is what makes any extractor trustworthy, including an AI one.
 3. **Ledger.** A statement is unique per *(account, reference month)*. Transactions get a generated UUID; no bank-provided identifier is trusted as a key. Raw data is never modified.
-4. **Categorization.** Category and scope (household vs. personal) live in a separate layer on top of the ledger, so a categorization mistake can never corrupt the raw data.
-5. **Insights.** Reports, budgets and plans are read-only views over categorized data.
+4. **Categorization.** A separate layer: one decision per payee, every confirmed decision becomes a rule, and an assistant can pre-fill suggestions that only count once you confirm them.
+5. **Closing.** A consumption view over all accounts: a credit card bill payment is replaced by the bill's items, transfers count nowhere, investments count as saved.
+
+Decisions behind these choices are recorded in [docs/decisions](docs/decisions/).
 
 ## Design principles
 
-- **Local-first and private.** SQLite on disk. No personal data in the repository; tests use synthetic statements.
+- **Local-first and private.** SQLite on disk, web interface on localhost. No personal data in the repository; tests use synthetic statements.
 - **Money is an integer.** Amounts are stored in cents, signed: negative is outflow, positive is inflow.
 - **Trust, but reconcile.** No import is accepted unless it balances.
+- **AI proposes, you confirm.** Assistant output goes through the same validation as everything else and never overwrites a human decision.
 - **Start small.** Each layer has to be useful on its own before the next one is built.
+
+## Usage
+
+```bash
+uv sync
+uv run fproject web          # http://127.0.0.1:8000: import, review, closing
+```
+
+Everything the web interface does is also available from the command line:
+
+```bash
+uv run fproject import statement.xlsx --owner jane --institution "Acme Bank"
+uv run fproject check bill.json                          # reconcile without storing
+uv run fproject import bill.json --owner jane --institution "Acme Bank" --kind credit_card
+uv run fproject categorize export 2026-09 -o request.json # payees awaiting review
+uv run fproject categorize apply suggestions.json         # assistant suggestions, unconfirmed
+uv run fproject close 2026-09                             # monthly closing
+uv run fproject summary 2026-09                           # raw per-account cash flow
+```
+
+With the synthetic export used in the tests, an import looks like this:
+
+```console
+$ uv run fproject import statement.xlsx --owner jane --institution "Acme Bank"
+jane · Acme Bank (checking)
+  2026-08     2 transactions  imported
+  2026-09     3 transactions  imported
+  2026-10     1 transactions  skipped: month not over yet
+```
+
+Import rules:
+- Every month must reconcile or nothing from the file is imported.
+- A month is imported once. Overlapping exports are fine: months already imported are skipped.
+- For checking accounts, the current month is skipped until it ends, so a partial month never blocks the complete one. Credit card bills are closed when issued.
+
+Data is stored in `data/fproject.db` (ignored by git); set `FPROJECT_DB` or pass `--db` to change it.
 
 ## Roadmap
 
@@ -48,21 +86,25 @@ flowchart LR
 - [x] Domain model: accounts, statements, transactions
 - [x] SQLite storage with one statement per account per month
 - [x] `Extractor` interface and reconciliation
-- [x] Counterparty details on transactions (who a transfer went to)
+- [x] Counterparty details and cardholder on transactions
 - [x] Spreadsheet extractor: configurable columns, split by month, row-level balance check
-- [x] `import` and monthly `summary` commands
-- [ ] LLM-based PDF extractor for complex layouts (e.g. credit card bills)
+- [x] `import`, `check` and per-account `summary` commands
+- [x] Credit card bills from PDF via an assistant-written JSON statement
+- [ ] API-based extractor writing the same JSON
 
 **Phase 2: Categorization**
-- [ ] Small, fixed set of categories
-- [ ] Scope: household vs. personal
-- [ ] Spending view: a credit card bill payment is replaced by the bill's itemized purchases
-- [ ] Money moved to savings or investments shown as saved, not spent
-- [ ] Assisted categorization with human confirmation
+- [x] Small, fixed set of categories
+- [x] Scope: household vs. personal
+- [x] Categorize per payee; confirmed decisions become rules
+- [x] Assisted categorization with human confirmation
+- [ ] Recategorize an already confirmed payee
+- [ ] ML classifier trained on confirmed decisions, with honest metrics
 
 **Phase 3: Monthly insights**
-- [ ] Income vs. expenses and what is left over
-- [ ] Top spending categories
+- [x] Income vs. spending and what is left over
+- [x] Spending by category and scope; largest expenses
+- [x] Card bill payment replaced by the bill's items; transfers and savings left out of spending
+- [x] Local web interface: import, review, closing
 - [ ] Month-over-month tracking
 
 **Phase 4: Budgets**
@@ -77,44 +119,6 @@ flowchart LR
 - [ ] Housing advisor: compare current housing cost against market and financing options
 - [ ] Spending coach for recurring categories such as food
 - [ ] Investment buckets
-
-## Usage
-
-Export your checking account as a spreadsheet (`.xlsx`) from your bank and import it.
-A file covering several months becomes one statement per month. With the synthetic
-export used in the tests:
-
-```console
-$ uv run fproject import statement.xlsx --owner jane --institution "Acme Bank"
-jane · Acme Bank (checking)
-  2026-08     2 transactions  imported
-  2026-09     3 transactions  imported
-  2026-10     1 transactions  skipped: month not over yet
-```
-
-Then see what came in, what went out, and where it went:
-
-```console
-$ uv run fproject summary 2026-09
-2026-09 · jane · Acme Bank (checking)
-
-  Opening balance        R$ 2.000,00
-  In                     R$ 4.000,00
-  Out                     -R$ 850,00
-  Net                    R$ 3.150,00
-  Closing balance        R$ 5.150,00
-
-  Where the money went
-    1. Pagamento de boleto · Building Condo       -R$ 600,00
-    2. Pix enviado · Green Grocer                 -R$ 250,00
-```
-
-Import rules:
-- Every month must reconcile, row by row, or nothing from the file is imported.
-- A month is imported once. Overlapping exports are fine: months already imported are skipped.
-- The current month is skipped until it ends, so a partial month never blocks the complete one.
-
-Data is stored in `data/fproject.db` (ignored by git); set `FPROJECT_DB` or pass `--db` to change it.
 
 ## Development
 
